@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create Lambda, DynamoDB, and API Gateway without S3 Bucket
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: Name of the S3 bucket that contains the Lambda code
+  S3Key:
+    Type: String
+    Description: S3 key for the Lambda code (e.g., path/to/lambda-code.zip)
+
+Resources:
+  # DynamoDB Table
+  PeopleTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: PeopleTable
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                Resource: arn:aws:dynamodb:*:*:table/PeopleTable
+
+  # Lambda Function (without S3 bucket creation)
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MyLambdaFunction
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: nodejs20.x
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: !Ref S3Key  # Use parameter for S3 key
+
+  # API Gateway RestApi
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: MyApi
+
+  # API Gateway Resource
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: myresource
+      RestApiId: !Ref ApiGatewayRestApi
+
+  # API Gateway Method
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      ResourceId: !Ref ApiGatewayResource
+      RestApiId: !Ref ApiGatewayRestApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction.Arn}/invocations
+
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref MyLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*
+
+Outputs:
+  ApiUrl:
+    Description: "API Gateway URL"
+    Value: !Sub
+      https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/myresource
+  DynamoDBTableName:
+    Description: "Name of the DynamoDB table created"
+    Value: !Ref PeopleTable
+  LambdaFunctionName:
+    Description: "Name of the Lambda function created"
+    Value: !Ref MyLambdaFunction

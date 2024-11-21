@@ -1,0 +1,30 @@
+version: '3.8'
+networks:
+  web-apps:
+    external: true
+
+services:
+  web:
+    container_name: wordpress_apps
+    image: webdevops/php-apache:7.4
+    ports:
+      - "8800:80"
+    volumes:
+      - ./wordpress:/app
+    networks:
+      - web-apps
+    depends_on:
+      - mysql
+
+  mysql:
+    image: mysql:8
+    volumes:
+      - mysql_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: q1w2e3r4t5y
+      MYSQL_DATABASE: wordpress
+    networks:
+      - web-apps
+
+volumes:
+  mysql_data:

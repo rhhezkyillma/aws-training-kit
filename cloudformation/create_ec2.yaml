@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Membuat EC2 Menggunakan Cloudfront"
+
+Resources:
+  MyEC2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties: 
+      KeyName: devops_cisly
+      InstanceType: 't2.micro'
+      ImageId: 'ami-003932de22c285676' # AMI ID untuk Ubuntu 20.04 LTS di region us-east-2 (Ohio)
+      SecurityGroupIds:
+        - "sg-0aae0298681027b4e"
+      BlockDeviceMappings: 
+        - DeviceName: '/dev/sda1'
+          Ebs: 
+            VolumeSize: '8'
+            VolumeType: 'gp2'
+      Tags:
+        - Key: Name
+          Value: 'MyUbuntuEC2'
+    DeletionPolicy: Delete
